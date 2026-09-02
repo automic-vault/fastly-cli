@@ -5,6 +5,7 @@ import (
 	"io"
 
 	"github.com/fastly/cli/pkg/argparser"
+	"github.com/fastly/cli/pkg/automicvault"
 	fsterr "github.com/fastly/cli/pkg/errors"
 	"github.com/fastly/cli/pkg/global"
 	"github.com/fastly/cli/pkg/text"
@@ -55,6 +56,9 @@ func (c *LoginCommand) Exec(in io.Reader, out io.Writer) error {
 }
 
 func (c *LoginCommand) execSSO(in io.Reader, out io.Writer) error {
+	if automicvault.Enabled == "true" {
+		return fmt.Errorf("Fastly SSO credentials are not supported by the Automic Vault Isotope")
+	}
 	if c.Globals.Flags.Token == "" {
 		return fsterr.RemediationError{
 			Inner:       fmt.Errorf("SSO login requires a token name via --token"),

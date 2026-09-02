@@ -5,6 +5,7 @@ import (
 
 	"github.com/fastly/cli/pkg/api"
 	"github.com/fastly/cli/pkg/auth"
+	"github.com/fastly/cli/pkg/automicvault"
 	"github.com/fastly/cli/pkg/config"
 	fsterr "github.com/fastly/cli/pkg/errors"
 	"github.com/fastly/cli/pkg/github"
@@ -101,36 +102,54 @@ type Data struct {
 //   - The FASTLY_API_TOKEN environment variable.
 //   - The `profile` manifest field mapped to an auth token name.
 //   - The default [auth] token (if configured).
-func (d *Data) Token() (string, lookup.Source) {
+func (d *Data) Token() (string, lookup.Source, error) {
+	name, token, source := d.selectedToken()
+	if source == lookup.SourceAuth && token == automicvault.Marker {
+		endpoint, _ := d.APIEndpoint()
+		resolved, err := automicvault.Get(name, endpoint)
+		if err != nil {
+			return "", source, err
+		}
+		return resolved, source, nil
+	}
+	return token, source, nil
+}
+
+func (d *Data) TokenSource() lookup.Source {
+	_, _, source := d.selectedToken()
+	return source
+}
+
+func (d *Data) selectedToken() (string, string, lookup.Source) {
 	if d.Flags.Token != "" {
 		if at := d.Config.GetAuthToken(d.Flags.Token); at != nil && at.Token != "" {
-			return at.Token, lookup.SourceAuth
+			return d.Flags.Token, at.Token, lookup.SourceAuth
 		}
-		return d.Flags.Token, lookup.SourceFlag
+		return "", d.Flags.Token, lookup.SourceFlag
 	}
 
 	if d.Flags.Profile != "" {
 		if at, ok := d.profileFlagToken(); ok {
-			return at.Token, lookup.SourceAuth
+			return d.Flags.Profile, at.Token, lookup.SourceAuth
 		}
-		return "", lookup.SourceUndefined
+		return "", "", lookup.SourceUndefined
 	}
 
 	if d.Env.APIToken != "" {
-		return d.Env.APIToken, lookup.SourceEnvironment
+		return "", d.Env.APIToken, lookup.SourceEnvironment
 	}
 
 	if d.Manifest != nil && d.Manifest.File.Profile != "" {
 		if at := d.Config.GetAuthToken(d.Manifest.File.Profile); at != nil && at.Token != "" {
-			return at.Token, lookup.SourceAuth
+			return d.Manifest.File.Profile, at.Token, lookup.SourceAuth
 		}
 	}
 
-	if _, at := d.Config.GetDefaultAuthToken(); at != nil && at.Token != "" {
-		return at.Token, lookup.SourceAuth
+	if name, at := d.Config.GetDefaultAuthToken(); at != nil && at.Token != "" {
+		return name, at.Token, lookup.SourceAuth
 	}
 
-	return "", lookup.SourceUndefined
+	return "", "", lookup.SourceUndefined
 }
 
 func (d *Data) profileFlagToken() (*config.AuthToken, bool) {

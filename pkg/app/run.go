@@ -409,7 +409,10 @@ func processToken(data *global.Data) (token string, tokenSource lookup.Source, e
 		return "", lookup.SourceUndefined, err
 	}
 
-	token, tokenSource = data.Token()
+	token, tokenSource, err = data.Token()
+	if err != nil {
+		return "", tokenSource, err
+	}
 
 	switch tokenSource {
 	case lookup.SourceUndefined:
@@ -545,7 +548,7 @@ func checkTokenExpirationWarning(data *global.Data, commandName string) {
 		return
 	}
 
-	_, src := data.Token()
+	src := data.TokenSource()
 	if src != lookup.SourceAuth {
 		return
 	}
@@ -616,7 +619,10 @@ func ssoAuthentication(outputMessage string, data *global.Data, forceReAuth bool
 	}
 	text.Break(data.Output)
 
-	token, tokenSource = data.Token()
+	token, tokenSource, err = data.Token()
+	if err != nil {
+		return token, tokenSource, err
+	}
 	if tokenSource == lookup.SourceUndefined {
 		return token, tokenSource, fsterr.ErrNoToken()
 	}

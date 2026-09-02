@@ -1,0 +1,32 @@
+name:
+  isotope:fastly-cli
+
+replaces:
+  brew:fastly
+
+build: |
+  ./scripts/config.sh
+  GOTOOLCHAIN=go1.26.6 CGO_ENABLED=0 go test -mod=readonly ./pkg/automicvault ./pkg/global ./pkg/config
+  mkdir -p bin
+  GOTOOLCHAIN=go1.26.6 CGO_ENABLED=0 GOOS=darwin GOARCH="$(go env GOARCH)" \
+    go build -mod=readonly -trimpath \
+    -ldflags "-s -w -X 'github.com/fastly/cli/pkg/revision.AppVersion=v${VERSION}' -X 'github.com/fastly/cli/pkg/automicvault.Enabled=true'" \
+    -o bin/fastly ./cmd/fastly
+  test "$(bin/fastly version | sed -n 's/^Fastly CLI version \([^ ]*\).*/\1/p')" = "v${VERSION}"
+  codesign --force --options runtime --timestamp \
+    --identifier fastly \
+    --sign "$CODESIGN_IDENTITY" \
+    bin/fastly
+  tar czf out.tgz bin/fastly
+
+justification:
+  title:
+    Unprotected Credential Access
+  detail: |
+    Fastly CLI stores named static API tokens in plaintext configuration, and
+    upstream macOS release executables are only ad-hoc signed.
+
+    This Isotope resolves selected static-token markers through Automic Vault,
+    binds each request to the token name and official Fastly API endpoint, and
+    rejects SSO credentials and alternate API endpoints. Its reviewed release
+    is signed with Hardened Runtime and no entitlements.

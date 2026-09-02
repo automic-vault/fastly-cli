@@ -37,7 +37,10 @@ func (c *TokenCommand) Exec(_ io.Reader, out io.Writer) error {
 		return err
 	}
 
-	token, src := c.Globals.Token()
+	token, src, err := c.Globals.Token()
+	if err != nil {
+		return err
+	}
 	if src == lookup.SourceUndefined || token == "" {
 		return fsterr.RemediationError{
 			Inner:       fmt.Errorf("no API token configured"),
