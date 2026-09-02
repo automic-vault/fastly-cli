@@ -3,6 +3,7 @@ package global_test
 import (
 	"testing"
 
+	"github.com/fastly/cli/pkg/automicvault"
 	"github.com/fastly/cli/pkg/config"
 	"github.com/fastly/cli/pkg/global"
 	"github.com/fastly/cli/pkg/lookup"
@@ -256,7 +257,10 @@ func TestToken(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotToken, gotSource := tt.data.Token()
+			gotToken, gotSource, err := tt.data.Token()
+			if err != nil {
+				t.Fatalf("Token() error = %v", err)
+			}
 			if gotToken != tt.wantToken {
 				t.Errorf("Token() token = %q, want %q", gotToken, tt.wantToken)
 			}
@@ -264,6 +268,21 @@ func TestToken(t *testing.T) {
 				t.Errorf("Token() source = %v, want %v", gotSource, tt.wantSource)
 			}
 		})
+	}
+}
+
+func TestManagedTokenRejectsAlternateEndpoint(t *testing.T) {
+	previous := automicvault.Enabled
+	automicvault.Enabled = "true"
+	t.Cleanup(func() { automicvault.Enabled = previous })
+	d := global.Data{Config: config.File{
+		Auth: config.Auth{Default: "production", Tokens: config.AuthTokens{
+			"production": {Type: config.AuthTokenTypeStatic, Token: automicvault.Marker},
+		}},
+		Fastly: config.Fastly{APIEndpoint: "https://example.invalid"},
+	}}
+	if _, _, err := d.Token(); err == nil {
+		t.Fatal("managed token accepted an alternate API endpoint")
 	}
 }
 
@@ -433,7 +452,10 @@ func TestTokenManifestProfileMissingNoSideEffect(t *testing.T) {
 		Output: &buf,
 	}
 
-	token, source := d.Token()
+	token, source, err := d.Token()
+	if err != nil {
+		t.Fatalf("Token() error = %v", err)
+	}
 	if token != "default-token" {
 		t.Errorf("Token() = %q, want %q", token, "default-token")
 	}
