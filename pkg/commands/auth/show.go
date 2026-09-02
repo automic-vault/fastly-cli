@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/fastly/cli/pkg/argparser"
+	"github.com/fastly/cli/pkg/automicvault"
 	"github.com/fastly/cli/pkg/config"
 	"github.com/fastly/cli/pkg/env"
 	"github.com/fastly/cli/pkg/global"
@@ -37,7 +38,7 @@ func (c *ShowCommand) Exec(_ io.Reader, out io.Writer) error {
 	}
 
 	if c.name == "" {
-		_, src := c.Globals.Token()
+		src := c.Globals.TokenSource()
 		switch src {
 		case lookup.SourceUndefined:
 			return fmt.Errorf("no token configured; run `fastly auth login` or pass a token name")
@@ -107,7 +108,18 @@ func (c *ShowCommand) Exec(_ io.Reader, out io.Writer) error {
 	}
 
 	if c.reveal {
-		text.Output(out, "Token: %s\n", entry.Token)
+		token := entry.Token
+		if token == automicvault.Marker {
+			endpoint, _ := c.Globals.APIEndpoint()
+			var err error
+			token, err = automicvault.Get(c.name, endpoint)
+			if err != nil {
+				return err
+			}
+		}
+		text.Output(out, "Token: %s\n", token)
+	} else if entry.Token == automicvault.Marker {
+		text.Output(out, "Token: managed by Automic Vault\n")
 	} else {
 		if len(entry.Token) > 8 {
 			text.Output(out, "Token: %s...%s\n", entry.Token[:4], entry.Token[len(entry.Token)-4:])

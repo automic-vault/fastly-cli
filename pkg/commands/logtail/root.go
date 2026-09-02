@@ -92,7 +92,10 @@ func (c *RootCommand) Exec(_ io.Reader, out io.Writer) error {
 	c.doneCh = make(chan struct{})
 
 	c.hClient = http.DefaultClient
-	c.token, _ = c.Globals.Token()
+	c.token, _, err = c.Globals.Token()
+	if err != nil {
+		return err
+	}
 
 	// Adjust the from/to times if they are
 	// defined. We adjust the times based on searchPadding.
