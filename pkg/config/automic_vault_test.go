@@ -1,7 +1,9 @@
 package config
 
 import (
+	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/fastly/cli/pkg/automicvault"
@@ -31,5 +33,27 @@ func TestAutomicVaultConfigFailsClosed(t *testing.T) {
 	alternate.Fastly.APIEndpoint = "https://example.invalid"
 	if err := alternate.Write(filepath.Join(t.TempDir(), "config.toml")); err == nil {
 		t.Fatal("accepted alternate API endpoint")
+	}
+}
+
+func TestAutomicVaultUseStaticPreservesManagedAuth(t *testing.T) {
+	previous := automicvault.Enabled
+	automicvault.Enabled = "true"
+	t.Cleanup(func() { automicvault.Enabled = previous })
+
+	file := File{Auth: Auth{Default: "production", Tokens: AuthTokens{
+		"production": {Type: AuthTokenTypeStatic, Token: automicvault.Marker},
+	}}}
+	path := filepath.Join(t.TempDir(), "config.toml")
+	if err := file.UseStatic(path); err != nil {
+		t.Fatalf("use static: %v", err)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read config: %v", err)
+	}
+	if got := string(data); !strings.Contains(got, `default = "production"`) ||
+		!strings.Contains(got, `token = "@av"`) {
+		t.Fatalf("managed auth lost:\n%s", got)
 	}
 }
