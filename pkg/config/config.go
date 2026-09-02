@@ -10,6 +10,7 @@ import (
 
 	toml "github.com/pelletier/go-toml"
 
+	"github.com/fastly/cli/pkg/automicvault"
 	"github.com/fastly/cli/pkg/env"
 	fsterr "github.com/fastly/cli/pkg/errors"
 	"github.com/fastly/cli/pkg/filesystem"
@@ -426,6 +427,10 @@ func (f *File) UseStatic(path string) error {
 
 // Write encodes in-memory data to disk.
 func (f *File) Write(path string) error {
+	removed, err := f.prepareAutomicVaultWrite(path)
+	if err != nil {
+		return err
+	}
 	// gosec flagged this:
 	// G304 (CWE-22): Potential file inclusion via variable
 	//
@@ -445,8 +450,61 @@ func (f *File) Write(path string) error {
 	if err := fp.Close(); err != nil {
 		return fmt.Errorf("error saving config file changes: %w", err)
 	}
+	for _, name := range removed {
+		if err := automicvault.Forget(name); err != nil {
+			return err
+		}
+	}
 
 	return nil
+}
+
+func (f *File) prepareAutomicVaultWrite(path string) ([]string, error) {
+	if automicvault.Enabled != "true" {
+		return nil, nil
+	}
+	if endpoint := f.Fastly.APIEndpoint; endpoint != "" && endpoint != automicvault.APIEndpoint {
+		return nil, fmt.Errorf("Automic Vault credentials require %s", automicvault.APIEndpoint)
+	}
+	if len(f.Profiles) != 0 {
+		return nil, fmt.Errorf("legacy Fastly profiles must be migrated before using Automic Vault")
+	}
+
+	previous := map[string]bool{}
+	if data, err := os.ReadFile(path); err == nil {
+		var old File
+		if err := toml.Unmarshal(data, &old); err != nil {
+			return nil, fmt.Errorf("failed to inspect existing Fastly credentials: %w", err)
+		}
+		for name, token := range old.Auth.Tokens {
+			previous[name] = token != nil && token.Token == automicvault.Marker
+		}
+	} else if !os.IsNotExist(err) {
+		return nil, fmt.Errorf("failed to inspect existing Fastly credentials: %w", err)
+	}
+
+	for name, token := range f.Auth.Tokens {
+		if token == nil || token.Type != AuthTokenTypeStatic || token.AccessToken != "" || token.RefreshToken != "" {
+			return nil, fmt.Errorf("Fastly token %q is not a supported static credential", name)
+		}
+		if token.Token == automicvault.Marker {
+			delete(previous, name)
+			continue
+		}
+		if err := automicvault.Store(name, token.Token); err != nil {
+			return nil, err
+		}
+		token.Token = automicvault.Marker
+		delete(previous, name)
+	}
+
+	removed := make([]string, 0, len(previous))
+	for name, managed := range previous {
+		if managed {
+			removed = append(removed, name)
+		}
+	}
+	return removed, nil
 }
 
 // Environment represents all of the configuration parameters that can come

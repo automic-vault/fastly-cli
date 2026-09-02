@@ -15,9 +15,11 @@ import (
 
 	"github.com/fastly/cli/pkg/api"
 	"github.com/fastly/cli/pkg/argparser"
+	"github.com/fastly/cli/pkg/automicvault"
 	"github.com/fastly/cli/pkg/config"
 	fsterr "github.com/fastly/cli/pkg/errors"
 	"github.com/fastly/cli/pkg/global"
+	"github.com/fastly/cli/pkg/lookup"
 	"github.com/fastly/cli/pkg/text"
 )
 
@@ -99,9 +101,17 @@ func (c *RevokeCommand) validateFlags() error {
 }
 
 func (c *RevokeCommand) revokeCurrent(in io.Reader, out io.Writer) error {
-	tok, _ := c.Globals.Token()
+	tok, source, err := c.Globals.Token()
+	if err != nil {
+		return err
+	}
 
 	names := findLocalTokensByValue(&c.Globals.Config, tok)
+	if source == lookup.SourceAuth {
+		if name := c.Globals.AuthTokenName(); name != "" {
+			names = []string{name}
+		}
+	}
 	if err := c.confirmDefaultRevocation(names, in, out); err != nil {
 		if errors.Is(err, errCancelled) {
 			return nil
@@ -109,7 +119,7 @@ func (c *RevokeCommand) revokeCurrent(in io.Reader, out io.Writer) error {
 		return err
 	}
 
-	client, err := c.authClient()
+	client, err := c.buildClient(tok)
 	if err != nil {
 		return err
 	}
@@ -137,7 +147,16 @@ func (c *RevokeCommand) revokeByName(in io.Reader, out io.Writer) error {
 		return err
 	}
 
-	client, err := c.buildClient(entry.Token)
+	token := entry.Token
+	var err error
+	if token == automicvault.Marker {
+		endpoint, _ := c.Globals.APIEndpoint()
+		token, err = automicvault.Get(c.name, endpoint)
+		if err != nil {
+			return err
+		}
+	}
+	client, err := c.buildClient(token)
 	if err != nil {
 		return err
 	}
@@ -155,7 +174,7 @@ func (c *RevokeCommand) revokeByName(in io.Reader, out io.Writer) error {
 	}
 
 	names := []string{c.name}
-	for _, n := range findLocalTokensByValue(&c.Globals.Config, entry.Token) {
+	for _, n := range findLocalTokensByValue(&c.Globals.Config, token) {
 		if n != c.name {
 			names = append(names, n)
 		}
@@ -274,7 +293,10 @@ func (c *RevokeCommand) revokeByFile(out io.Writer) error {
 }
 
 func (c *RevokeCommand) authClient() (api.Interface, error) {
-	tok, _ := c.Globals.Token()
+	tok, _, err := c.Globals.Token()
+	if err != nil {
+		return nil, err
+	}
 	if tok == "" {
 		return nil, fsterr.RemediationError{
 			Inner:       fmt.Errorf("no token available for authentication"),
@@ -409,6 +431,9 @@ func readTokenIDFile(path string) ([]string, error) {
 }
 
 func findLocalTokensByValue(cfg *config.File, raw string) []string {
+	if raw == automicvault.Marker {
+		return nil
+	}
 	var names []string
 	for name, entry := range cfg.Auth.Tokens {
 		if entry.Token == raw {
