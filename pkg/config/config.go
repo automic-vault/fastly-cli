@@ -409,6 +409,7 @@ func (f *File) NeedsUpdating(data []byte, out io.Writer, errLog fsterr.LogInterf
 //
 // NOTE: We will attempt to migrate the profile data.
 func (f *File) UseStatic(path string) error {
+	managedAuth := f.Auth
 	err := toml.Unmarshal(Static, f)
 	if err != nil {
 		return invalidStaticConfigErr(err)
@@ -416,6 +417,9 @@ func (f *File) UseStatic(path string) error {
 
 	f.CLI.Version = revision.SemVer(revision.AppVersion)
 	f.MigrateLegacy()
+	if automicvault.Enabled == "true" {
+		f.Auth = managedAuth
+	}
 
 	err = ensureConfigDirExists(path)
 	if err != nil {
