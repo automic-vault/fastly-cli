@@ -6,6 +6,7 @@ import (
 	"github.com/fastly/kingpin"
 
 	"github.com/fastly/cli/pkg/argparser"
+	"github.com/fastly/cli/pkg/automicvault"
 	"github.com/fastly/cli/pkg/commands/airuntimecontrol"
 	arckey "github.com/fastly/cli/pkg/commands/airuntimecontrol/key"
 	arcprovider "github.com/fastly/cli/pkg/commands/airuntimecontrol/provider"
@@ -219,8 +220,10 @@ func Define( // nolint:revive // function-length
 	var whoamiCommands []argparser.Command
 
 	if !disableAuthCmd {
-		ssoCmdRoot := sso.NewRootCommand(app, data)
-		ssoCommands = []argparser.Command{ssoCmdRoot}
+		if automicvault.Enabled != "true" {
+			ssoCmdRoot := sso.NewRootCommand(app, data)
+			ssoCommands = []argparser.Command{ssoCmdRoot}
+		}
 
 		authCmdRoot := authcmd.NewRootCommand(app, data)
 		authLogin := authcmd.NewLoginCommand(authCmdRoot.CmdClause, data)
@@ -587,7 +590,7 @@ func Define( // nolint:revive // function-length
 	objectStorageAccesskeysList := accesskeys.NewListCommand(objectStorageAccesskeysRoot.CmdClause, data)
 	popCmdRoot := pop.NewRootCommand(app, data)
 	productsCmdRoot := products.NewRootCommand(app, data)
-	if !disableAuthCmd {
+	if !disableAuthCmd && automicvault.Enabled != "true" {
 		profileCmdRoot := profile.NewRootCommand(app, data)
 		profileCreate := profile.NewCreateCommand(profileCmdRoot.CmdClause, data)
 		profileDelete := profile.NewDeleteCommand(profileCmdRoot.CmdClause, data)

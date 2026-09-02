@@ -1,3 +1,22 @@
+# Automic Vault Fork Notes
+
+This repository is the Automic Vault fork of Fastly CLI.
+
+Automic Vault is a macOS-first system that keeps developer credentials in
+custody and applies them only after policy or the user allows the complete
+operation requested by verified software.
+
+The [Fastly CLI Hardener work](https://github.com/automic-vault/automic-vault/issues/186)
+keeps named static API tokens out of plaintext configuration. This fork binds
+the selected token name and official Fastly API endpoint to a direct Automic
+Vault request. SSO credentials and alternate API endpoints fail closed.
+
+Automic Vault's reviewed release process builds and signs the executable with
+Hardened Runtime and no entitlements. This source fork alone does not establish
+Hardened State. The remainder of this README is the original upstream README.
+
+---
+
 <div align="center">
   <h3 align="center">Fastly CLI</h3>
   <p align="center">A CLI for interacting with the Fastly platform.</p>
