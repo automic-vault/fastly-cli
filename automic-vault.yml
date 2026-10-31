@@ -5,9 +5,9 @@ replaces:
   brew:fastly
 
 build: |
-  GOTOOLCHAIN=go1.26.6 CGO_ENABLED=0 go test -mod=readonly ./pkg/automicvault ./pkg/global ./pkg/config
+  GOTOOLCHAIN=go1.26.10 CGO_ENABLED=0 go test -mod=readonly ./pkg/automicvault ./pkg/global ./pkg/config
   mkdir -p bin
-  GOTOOLCHAIN=go1.26.6 CGO_ENABLED=0 GOOS=darwin GOARCH="$(go env GOARCH)" \
+  GOTOOLCHAIN=go1.26.10 CGO_ENABLED=0 GOOS=darwin GOARCH="$(go env GOARCH)" \
     go build -mod=readonly -trimpath \
     -ldflags "-s -w -X 'github.com/fastly/cli/pkg/revision.AppVersion=v${VERSION}' -X 'github.com/fastly/cli/pkg/automicvault.Enabled=true'" \
     -o bin/fastly ./cmd/fastly
